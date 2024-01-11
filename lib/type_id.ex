@@ -4,17 +4,6 @@ defmodule TypeID do
   alias TypeID.Base32
   alias TypeID.UUID
 
-  @enforce_keys [:prefix, :suffix]
-  defstruct @enforce_keys
-
-  @typedoc """
-  An internal struct representing a `TypeID`.
-  """
-  @opaque t() :: %__MODULE__{
-            prefix: String.t(),
-            suffix: String.t()
-          }
-
   @seperator ?_
 
   @doc """
@@ -26,17 +15,17 @@ defmodule TypeID do
   ### Example
 
       iex> TypeID.new("acct")
-      #TypeID<"acct_01h45y0sxkfmntta78gqs1vsw6">
+      "acct_01h45y0sxkfmntta78gqs1vsw6"
 
   """
-  @spec new(prefix :: String.t()) :: t()
-  @spec new(prefix :: String.t(), Keyword.t()) :: t()
+  @spec new(prefix :: String.t()) :: String.t()
+  @spec new(prefix :: String.t(), Keyword.t()) :: String.t()
   def new(prefix, opts \\ []) do
     suffix =
       UUID.uuid7(opts)
       |> Base32.encode()
 
-    %__MODULE__{prefix: prefix, suffix: suffix}
+    prefix <> "_" <> suffix
   end
 
   @doc """
@@ -49,8 +38,9 @@ defmodule TypeID do
       "doc"
 
   """
-  @spec prefix(tid :: t()) :: String.t()
-  def prefix(%__MODULE__{prefix: prefix}) do
+  @spec prefix(tid :: String.t()) :: String.t()
+  def prefix(tid) do
+    [prefix, _] = String.split(tid, "_")
     prefix
   end
 
@@ -64,8 +54,9 @@ defmodule TypeID do
       "01h45y3ps9e18adjv9zvx743s2"
 
   """
-  @spec suffix(tid :: t()) :: String.t()
-  def suffix(%__MODULE__{suffix: suffix}) do
+  @spec suffix(tid :: String.t()) :: String.t()
+  def suffix(tid) do
+    [_, suffix] = String.split(tid, "_")
     suffix
   end
 
@@ -84,13 +75,15 @@ defmodule TypeID do
       "01h4rn40ybeqws3gfp073jt81b"
 
   """
-  @spec to_iodata(tid :: t()) :: iodata()
-  def to_iodata(%__MODULE__{prefix: "", suffix: suffix}) do
-    suffix
-  end
+  @spec to_iodata(tid :: String.t()) :: iodata()
+  def to_iodata(tid) do
+    case String.split(tid, "_") do
+      [suffix] ->
+        suffix
 
-  def to_iodata(%__MODULE__{prefix: prefix, suffix: suffix}) do
-    [prefix, @seperator, suffix]
+      [prefix, suffix] ->
+        [prefix, @seperator, suffix]
+    end
   end
 
   @doc """
@@ -103,8 +96,8 @@ defmodule TypeID do
       "user_01h45y6thxeyg95gnpgqqefgpa"
 
   """
-  @spec to_string(tid :: t()) :: String.t()
-  def to_string(%__MODULE__{} = tid) do
+  @spec to_string(tid :: String.t()) :: String.t()
+  def to_string(tid) do
     tid
     |> to_iodata()
     |> IO.iodata_to_binary()
@@ -120,9 +113,10 @@ defmodule TypeID do
       <<1, 137, 11, 228, 17, 55, 125, 246, 183, 43, 221, 167, 39, 216, 23, 169>>
 
   """
-  @spec uuid_bytes(tid :: t()) :: binary()
-  def uuid_bytes(%__MODULE__{suffix: suffix}) do
-    Base32.decode!(suffix)
+  @spec uuid_bytes(tid :: String.t()) :: binary()
+  def uuid_bytes(tid) do
+    suffix(tid)
+    |> Base32.decode!()
   end
 
   @doc """
@@ -135,8 +129,8 @@ defmodule TypeID do
       "01890be5-d3c7-7c8e-b261-3bdd8e4a64d3"
 
   """
-  @spec uuid(tid :: t()) :: String.t()
-  def uuid(%__MODULE__{} = tid) do
+  @spec uuid(tid :: String.t()) :: String.t()
+  def uuid(tid) do
     tid
     |> uuid_bytes()
     |> UUID.binary_to_string()
@@ -145,12 +139,16 @@ defmodule TypeID do
   @doc """
   Like `from/2` but raises an error if the `prefix` or `suffix` are invalid.
   """
-  @spec from!(prefix :: String.t(), suffix :: String.t()) :: t() | no_return()
+  @spec from!(prefix :: String.t(), suffix :: String.t()) :: String.t() | no_return()
   def from!(prefix, suffix) do
     validate_prefix!(prefix)
     validate_suffix!(suffix)
 
-    %__MODULE__{prefix: prefix, suffix: suffix}
+    if String.length(prefix) > 0 do
+      prefix <> "_" <> suffix
+    else
+      suffix
+    end
   end
 
   @doc """
@@ -160,10 +158,10 @@ defmodule TypeID do
 
       iex> {:ok, tid} = TypeID.from("invoice", "01h45ydzqkemsb9x8gq2q7vpvb")
       iex> tid
-      #TypeID<"invoice_01h45ydzqkemsb9x8gq2q7vpvb">
+      "invoice_01h45ydzqkemsb9x8gq2q7vpvb"
 
   """
-  @spec from(prefix :: String.t(), suffix :: String.t()) :: {:ok, t()} | :error
+  @spec from(prefix :: String.t(), suffix :: String.t()) :: {:ok, String.t()} | :error
   def from(prefix, suffix) do
     {:ok, from!(prefix, suffix)}
   rescue
@@ -173,7 +171,7 @@ defmodule TypeID do
   @doc """
   Like `from_string/1` but raises an error if the string is invalid.
   """
-  @spec from_string!(String.t()) :: t() | no_return()
+  @spec from_string!(String.t()) :: String.t() | no_return()
   def from_string!(str) do
     case String.split(str, <<@seperator>>) do
       [prefix, suffix] when prefix != "" ->
@@ -194,10 +192,10 @@ defmodule TypeID do
 
       iex> {:ok, tid} = TypeID.from_string("game_01h45yhtgqfhxbcrsfbhxdsdvy")
       iex> tid
-      #TypeID<"game_01h45yhtgqfhxbcrsfbhxdsdvy">
+      "game_01h45yhtgqfhxbcrsfbhxdsdvy"
 
   """
-  @spec from_string(String.t()) :: {:ok, t()} | :error
+  @spec from_string(String.t()) :: {:ok, String.t()} | :error
   def from_string(str) do
     {:ok, from_string!(str)}
   rescue
@@ -207,7 +205,7 @@ defmodule TypeID do
   @doc """
   Like `from_uuid/2` but raises an error if the `prefix` or `uuid` are invalid.
   """
-  @spec from_uuid!(prefix :: String.t(), uuid :: String.t()) :: t() | no_return()
+  @spec from_uuid!(prefix :: String.t(), uuid :: String.t()) :: String.t() | no_return()
   def from_uuid!(prefix, uuid) do
     uuid_bytes = UUID.string_to_binary(uuid)
     from_uuid_bytes!(prefix, uuid_bytes)
@@ -220,10 +218,10 @@ defmodule TypeID do
 
       iex> {:ok, tid} = TypeID.from_uuid("device", "01890be9-b248-777e-964e-af1d244f997d")
       iex> tid
-      #TypeID<"device_01h45ykcj8exz9cknf3mj4z6bx">
+      "device_01h45ykcj8exz9cknf3mj4z6bx"
 
   """
-  @spec from_uuid(prefix :: String.t(), uuid :: String.t()) :: {:ok, t()} | :error
+  @spec from_uuid(prefix :: String.t(), uuid :: String.t()) :: {:ok, String.t()} | :error
   def from_uuid(prefix, uuid) do
     {:ok, from_uuid!(prefix, uuid)}
   rescue
@@ -234,7 +232,7 @@ defmodule TypeID do
   Like `from_uuid_bytes/2` but raises an error if the `prefix` or `uuid_bytes`
   are invalid.
   """
-  @spec from_uuid_bytes!(prefix :: String.t(), uuid_bytes :: binary()) :: t() | no_return()
+  @spec from_uuid_bytes!(prefix :: String.t(), uuid_bytes :: binary()) :: String.t() | no_return()
   def from_uuid_bytes!(prefix, <<uuid_bytes::binary-size(16)>>) do
     suffix = Base32.encode(uuid_bytes)
     from!(prefix, suffix)
@@ -247,10 +245,11 @@ defmodule TypeID do
 
       iex> {:ok, tid} = TypeID.from_uuid_bytes("policy", <<1, 137, 11, 235, 83, 221, 116, 212, 161, 42, 205, 139, 182, 243, 175, 110>>)
       iex> tid
-      #TypeID<"policy_01h45ypmyxekaa2apdhevf7bve">
+      "policy_01h45ypmyxekaa2apdhevf7bve"
 
   """
-  @spec from_uuid_bytes(prefix :: String.t(), uuid_bytes :: binary()) :: {:ok, t()} | :error
+  @spec from_uuid_bytes(prefix :: String.t(), uuid_bytes :: binary()) ::
+          {:ok, String.t()} | :error
   def from_uuid_bytes(prefix, uuid_bytes) do
     {:ok, from_uuid_bytes!(prefix, uuid_bytes)}
   rescue
@@ -291,14 +290,6 @@ defmodule TypeID do
 
     @impl Ecto.ParameterizedType
     defdelegate load(data, loader, params), to: TypeID.Ecto
-  end
-end
-
-defimpl Inspect, for: TypeID do
-  import Inspect.Algebra
-
-  def inspect(tid, _opts) do
-    concat(["#TypeID<\"", TypeID.to_string(tid), "\">"])
   end
 end
 

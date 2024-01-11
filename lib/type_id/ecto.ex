@@ -18,35 +18,21 @@ if Code.ensure_loaded?(Ecto.ParameterizedType) do
     @doc false
     def cast(nil, _params), do: {:ok, nil}
 
-    def cast(%TypeID{prefix: prefix} = tid, params) do
-      if prefix == find_prefix(params) do
+    def cast(tid, params) do
+      if TypeID.prefix(tid) == find_prefix(params) do
         {:ok, tid}
       else
         :error
       end
     end
 
-    def cast(str, params) when is_binary(str) do
-      prefix = find_prefix(params)
-
-      if String.starts_with?(str, prefix) do
-        TypeID.from_string(str)
-      else
-        with {:ok, uuid} <- Ecto.UUID.cast(str) do
-          TypeID.from_uuid(prefix, uuid)
-        end
-      end
-    end
-
-    def cast(_, _), do: :error
-
     @doc false
     def dump(nil, _dumper, _params), do: {:ok, nil}
 
-    def dump(%TypeID{} = tid, _, %{type: type} = params) do
+    def dump(tid, _, %{type: type} = params) do
       prefix = find_prefix(params)
 
-      case {tid.prefix, type} do
+      case {TypeID.prefix(tid), type} do
         {^prefix, :string} -> {:ok, TypeID.to_string(tid)}
         {^prefix, :binary_id} -> {:ok, TypeID.uuid(tid)}
         _ -> :error
@@ -61,7 +47,8 @@ if Code.ensure_loaded?(Ecto.ParameterizedType) do
     def load(str, _, %{type: :string} = params) do
       prefix = find_prefix(params)
 
-      with {:ok, %TypeID{prefix: ^prefix}} = loaded <- TypeID.from_string(str) do
+      with {:ok, tid} = loaded <- TypeID.from_string(str),
+           true <- prefix == TypeID.prefix(tid) do
         loaded
       end
     end
