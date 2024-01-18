@@ -86,14 +86,19 @@ if Code.ensure_loaded?(Ecto.ParameterizedType) do
         raise ArgumentError, "`type` must be `:string` or `:binary_id`"
       end
 
-      if primary_key do
-        %{primary_key: primary_key, schema: schema, field: field, prefix: prefix, type: type}
-      else
-        %{schema: schema, field: field, type: type}
+      cond do
+        primary_key != nil ->
+          %{primary_key: primary_key, schema: schema, field: field, prefix: prefix, type: type}
+
+        prefix != nil ->
+          %{schema: schema, field: field, type: type, prefix: prefix}
+
+        true ->
+          %{schema: schema, field: field, type: type}
       end
     end
 
-    defp find_prefix(%{prefix: prefix}), do: prefix
+    defp find_prefix(%{prefix: prefix}) when not is_nil(prefix), do: prefix
 
     defp find_prefix(%{schema: schema, field: field}) do
       %{related: schema, related_key: field} = schema.__schema__(:association, field)
@@ -101,5 +106,7 @@ if Code.ensure_loaded?(Ecto.ParameterizedType) do
 
       prefix
     end
+
+    defp find_prefix(%{prefix: prefix}), do: prefix
   end
 end
